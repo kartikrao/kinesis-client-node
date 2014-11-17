@@ -10,7 +10,8 @@ fs = require 'fs-extra'
 async = require 'async'
 
 pkg    = require './package.json'
-banner = ['/**', 
+banner = [ '#!env node'
+	'/**', 
 	' * <%= pkg.description %>',
 	' * @version   : <%= pkg.version %>',
 	' * @copyright : <%= pkg.copyright %>',

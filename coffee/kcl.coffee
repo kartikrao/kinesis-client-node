@@ -3,7 +3,6 @@
 readline = require 'readline'
 _ = require 'underscore'
 EventEmitter = require('events').EventEmitter
-helper = require './kclhelper'
 
 class IOHandler
 	# process.stdout and stderr are blocking in TTY mode
@@ -20,7 +19,7 @@ class IOHandler
 	write_error : (error) ->
 		@error_file.write "#{error}\n"
 		return
-	write_action : ->
+	write_action : (response) ->
 		@write_line JSON.stringify(response)
 		return
 	loadAction : (line) ->
@@ -58,7 +57,7 @@ class Checkpointer
 		@io_handler.write_action response
 		return
 
-class KCL
+class KCL extends EventEmitter
 	constructor : (_process=process) ->
 		@io_handler = new IOHandler _process
 		@checkpointer = new Checkpointer @io_handler
