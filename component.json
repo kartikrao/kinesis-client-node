@@ -1,0 +1,11 @@
+{
+  "name": "kinesis-client-node",
+  "repo": "kartikrao/kinesis-client-node",
+  "description": "KCL for node.js",
+  "version": "0.1",
+  "keywords": ["aws", "kinesis", "kinesis client"],
+  "dependencies": {},
+  "development": {},
+  "main": "lib/kcl.js",
+  "scripts": [ "lib/kcl.js" ]
+}

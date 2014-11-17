@@ -1,0 +1,50 @@
+{
+  "name": "kinesis-client-node",
+  "description": "KCL for node.js",
+  "author": "Kartik Rao",
+  "version": "0.1.0",
+  "copyright": "kartik.rao@adinfinity.com.au",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "http://github.com/npm/npm.git"
+  },
+  "dependencies": {
+    "async": "0.9.0",
+    "aws-sdk": "2.0.27",
+    "coffee-script": "1.8.0",
+    "glob": "4.0.6",
+    "optimist": "0.6.1",
+    "underscore": "1.7.0",
+    "wget": "0.0.1"
+  },
+  "devDependencies": {
+    "download": "3.1.2",
+    "download-status": "2.1.0",
+    "fs-extra": "0.12.0",
+    "gulp": "3.8.10",
+    "gulp-changed": "0.3.0",
+    "gulp-clean": "0.2.4",
+    "gulp-closure-compiler": "0.2.1",
+    "gulp-coffee": "1.4.2",
+    "gulp-header": "^1.2.2",
+    "kinesalite": "0.1.2",
+    "mocha": "1.13.0",
+    "node-dev": "2.1.5",
+    "should": "2.0.1",
+    "uglify-js": "2.4.0"
+  },
+  "engine": "node >= 0.10.4",
+  "scripts": {
+    "test": "mocha",
+    "start": "bin/server"
+  },
+  "jam": {
+    "main": "lib/kcl.js",
+    "include": [
+      "lib/kcl.js",
+      "README.md",
+      "LICENSE"
+    ]
+  }
+}
