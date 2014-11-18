@@ -42,7 +42,7 @@ argv = optimist.boolean(["print_classpath", "print_command"]).argv
 if argv.sample?
 	if argv.props?
 		console.error "Replacing provided properties with sample properties due to arg --sample"
-	argv.props = if argv.sample.indexOf("/") > -1 then argv.sample else "#{__dirname}/#{argv.sample}"
+	argv.props = if argv.sample.indexOf("/") > -1 then argv.sample else "#{kclhelper.kclpath}/sample/#{argv.sample}"
 
 if argv.print_classpath is true
 	kclhelper.getKclClasspath argv.props, null, (err, cp) ->
