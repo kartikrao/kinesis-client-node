@@ -3,6 +3,7 @@ gutil   = require 'gulp-util'
 clean   = require 'gulp-clean'
 header  = require 'gulp-header'
 coffee  = require 'gulp-coffee'
+chmod   = require 'gulp-chmod'
 path    = require 'path'
 Download= require 'download'
 progress= require 'download-status'
@@ -10,7 +11,7 @@ fs = require 'fs-extra'
 async = require 'async'
 
 pkg    = require './package.json'
-banner = [ '#!env node'
+banner = [ '#!env /usr/local/bin/node'
 	'/**', 
 	' * <%= pkg.description %>',
 	' * @version   : <%= pkg.version %>',
@@ -81,11 +82,16 @@ gulp.task 'clean', ->
 	gulp.src('./lib/*.js', {read: false})
 	.pipe(clean())
 
+
+gulp.task 'watch', ->
+	gulp.watch './coffee/**/*.coffee', ['lib']
+
 gulp.task 'lib', ['clean'], ->
 	gulp.src('./coffee/*.coffee')
 	.pipe(coffee())
 	.pipe(header(banner, {pkg: pkg}))
+	.pipe(chmod({owner: {execute: true, write: true, read: true}}))
 	.pipe(gulp.dest(LIB_JS))
 	.on('error', gutil.log)
 
-gulp.task 'default', ['lib']
+gulp.task 'default', ['watch']

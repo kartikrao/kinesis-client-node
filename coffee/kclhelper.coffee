@@ -1,28 +1,29 @@
-#!env node
+#!env /usr/local/bin/node
 
-path = require 'path'
-optimist = require('optimist')
+optimist = require 'optimist'
 _ = require 'underscore'
+path = require 'path'
+glob = require 'glob'
 
 class KCLHelper
 	constructor : ->
-		@kclpath = __dirname
+		@kclpath = path.resolve("#{__dirname}/../")
 		@separator = ":"
 	getKclDir : -> @kclpath
 	getKclJarPath : (cb) ->
 		self = @
-		glob "#{@kclpath}/jars/**/*jar", (err, files=[]) ->
+		glob "#{self.kclpath}/jars/**/*.jar", (err, files=[]) ->
 			cb files.join(self.separator)
 			return
 		return
-	getKclClasspath : (propertyPath=null, paths, cb) ->
+	getKclClasspath : (propertyPath=null, paths=[], cb) ->
 		rpaths = []
-		rpaths.push path.resolve(path) for path in paths
-		if propertyPath?
+		rpaths.push path.resolve(p) for p in paths
+		if propertyPath?.length > 0
 			rpaths.push path.resolve(propertyPath)
 		self = @
 		@getKclJarPath (jarpath=[]) ->
-			classpath = Array.concat rpaths, jarpath
+			classpath = _.union rpaths, jarpath
 			cb classpath.join(self.separator)
 			return
 		return
@@ -34,24 +35,22 @@ class KCLHelper
 
 kclhelper = new KCLHelper
 
-argv = optimist.boolean ["print_classpath", "print_command"]
+argv = optimist.boolean(["print_classpath", "print_command"]).argv
 
-args = _.clone argv
-
-if args.sample?
-	if args.properties?
+if argv.sample?
+	if argv.properties?
 		console.error "Replacing provided properties with sample properties due to arg --sample"
-	args.properties = if args.sample.indexOf("/") > -1 then args.sample else "#{__dirname}/#{args.sample}"
+	argv.properties = if argv.sample.indexOf("/") > -1 then argv.sample else "#{__dirname}/#{argv.sample}"
 
-if args.print_classpath is "true"
-	kclhelper.getKclClasspath (cp) ->
+if argv.print_classpath is true
+	kclhelper.getKclClasspath argv.properties, null, (cp) ->
 		console.log cp
 		return
-else if args.print_command?
-	if args.java? and args.properties?
+else if argv.print_command?
+	if argv.java? and argv.properties?
 		mld_class = "com.amazonaws.services.kinesis.multilang.MultiLangDaemon"
-		paths = if args.paths? then args.paths.split(",") else []
-		kclhelper.getKclAppCommand args.java, mld_class, args.properties, paths
+		paths = if argv.paths? then argv.paths.split(",") else []
+		kclhelper.getKclAppCommand argv.java, mld_class, argv.properties, paths
 	else
 		console.error "Must provide arguments --java and --properties\n"
 else

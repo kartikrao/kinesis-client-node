@@ -1,1 +1,2 @@
-kcl = require '../'
+kcl = require '../lib/kcl'
+

@@ -1,4 +1,4 @@
-#!env node
+#!env /usr/local/bin/node
 
 readline = require 'readline'
 _ = require 'underscore'

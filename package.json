@@ -24,6 +24,7 @@
     "fs-extra": "0.12.0",
     "gulp": "3.8.10",
     "gulp-changed": "0.3.0",
+    "gulp-chmod": "^1.2.0",
     "gulp-clean": "0.2.4",
     "gulp-closure-compiler": "0.2.1",
     "gulp-coffee": "1.4.2",
