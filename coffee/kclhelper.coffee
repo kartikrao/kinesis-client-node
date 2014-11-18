@@ -16,13 +16,27 @@ class KCLHelper
 			cb null, files.join(self.separator)
 			return
 		return
-	getKclClasspath : (propertyPath=null, paths=[], cb) ->
-		rpaths = []
-		rpaths.push path.resolve(p) for p in paths
-		if propertyPath?.length > 0
-			rpaths.push path.resolve(propertyPath)
+	getKclClasspath : (propertyPath=null, paths, cb) ->
 		self = @
-		@getKclJarPath cb
+
+		userpaths = []
+		# Handle User Supplied Paths
+		if _.isString(paths) 
+			if paths.indexOf(",") > -1
+				paths = paths.split(",")
+			else
+				paths = [paths]
+		else if _.isArray(paths)
+			for p in paths
+				userpaths.push(path.resolve(p)) if p?.length > 0
+
+		@getKclJarPath (err, jarpaths) ->
+			if propertyPath?
+				propertiesFolder = propertyPath.substring(0, propertyPath.lastIndexOf("/") + 1)
+				jarpaths = "#{jarpaths}:#{path.resolve(propertiesFolder)}"
+			if userpaths?.length > 0
+				jarpaths = userpaths.join(self.kclpath) + jarpaths
+			cb null, jarpaths
 		return
 	getKclAppCommand : (java, mld_class, properties, paths=[], cb) ->
 		baseName = properties
