@@ -3,7 +3,7 @@
 optimist = require 'optimist'
 _ = require 'underscore'
 path = require 'path'
-glob = require 'glob'
+Glob = require('glob').Glob
 
 class KCLHelper
 	constructor : ->
@@ -12,8 +12,8 @@ class KCLHelper
 	getKclDir : -> @kclpath
 	getKclJarPath : (cb) ->
 		self = @
-		glob "#{self.kclpath}/jars/**/*.jar", (err, files=[]) ->
-			cb files.join(self.separator)
+		new Glob "#{self.kclpath}/jars/**/*.jar", {},(err, files=[]) ->
+			cb null, files.join(self.separator)
 			return
 		return
 	getKclClasspath : (propertyPath=null, paths=[], cb) ->
@@ -22,43 +22,46 @@ class KCLHelper
 		if propertyPath?.length > 0
 			rpaths.push path.resolve(propertyPath)
 		self = @
-		@getKclJarPath (jarpath=[]) ->
-			classpath = _.union rpaths, jarpath
-			cb classpath.join(self.separator)
-			return
+		@getKclJarPath cb
 		return
-	getKclAppCommand : (java, mld_class, properties, paths=[]) ->
+	getKclAppCommand : (java, mld_class, properties, paths=[], cb) ->
 		baseName = properties
 		if properties.indexOf("/") > -1
 			baseName = properties.substring(properties.lastIndexOf("/") + 1)
-		"#{java} -cp #{@getKclClasspath(properties, paths)} #{mld_class} #{baseName}"
+		@getKclClasspath properties, paths, (err, cp) ->
+			if not err?
+				cb null, "#{java} -cp #{cp} #{mld_class} #{baseName}"
+			else
+				cb err
+			return
 
 kclhelper = new KCLHelper
 
 argv = optimist.boolean(["print_classpath", "print_command"]).argv
 
 if argv.sample?
-	if argv.properties?
+	if argv.props?
 		console.error "Replacing provided properties with sample properties due to arg --sample"
-	argv.properties = if argv.sample.indexOf("/") > -1 then argv.sample else "#{__dirname}/#{argv.sample}"
+	argv.props = if argv.sample.indexOf("/") > -1 then argv.sample else "#{__dirname}/#{argv.sample}"
 
 if argv.print_classpath is true
-	kclhelper.getKclClasspath argv.properties, null, (cp) ->
-		console.log cp
+	kclhelper.getKclClasspath argv.props, null, (err, cp) ->
+		console.log "CLASSPATH=", cp
 		return
 else if argv.print_command?
-	if argv.java? and argv.properties?
+	if argv.java? and argv.props?
 		mld_class = "com.amazonaws.services.kinesis.multilang.MultiLangDaemon"
 		paths = if argv.paths? then argv.paths.split(",") else []
-		kclhelper.getKclAppCommand argv.java, mld_class, argv.properties, paths
+		kclhelper.getKclAppCommand argv.java, mld_class, argv.props, paths, (err, command) ->
+			console.log command
 	else
-		console.error "Must provide arguments --java and --properties\n"
+		console.error "Must provide arguments --java and --props\n"
 else
 	usage = """
 		--java  $path_to_java_executable - Required
 		--props $rel_path_to_properties  - Required
-		--print_classpath [false]        - Show classpath
-		--print_command   [false]        - Show Java command
+		--print_classpath [false]        - Print classpath
+		--print_command   [false]        - Print Java command
 		--sample          [false]        - Use sample properties
 	"""
 	console.error usage
