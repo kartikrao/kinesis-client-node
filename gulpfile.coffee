@@ -11,7 +11,7 @@ fs = require 'fs-extra'
 async = require 'async'
 
 pkg    = require './package.json'
-banner = [ '#!env /usr/local/bin/node'
+banner = [ '#!/usr/bin/env node'
 	'/**', 
 	' * <%= pkg.description %>',
 	' * @version   : <%= pkg.version %>',
@@ -35,6 +35,7 @@ JARS = [{groupId: 'com.amazonaws', artifactId: 'amazon-kinesis-client', version:
 JAR_PATH   = path.resolve "#{__dirname}/jars"
 MAVEN_REPO = "http://search.maven.org/remotecontent?filepath="
 LIB_JS     = "./lib"
+SAMPLE_JS  = "./lib/sample"
 
 gulp.task 'setup', (taskCallback) ->
 	getJarPaths = (meta) ->
@@ -78,15 +79,26 @@ gulp.task 'setup', (taskCallback) ->
 		return
 	return
 
-gulp.task 'clean', ->
+gulp.task 'cleanlib', ->
 	gulp.src('./lib/*.js', {read: false})
 	.pipe(clean())
 
+gulp.task 'cleansample', ->
+	gulp.src('./lib/sample/*', {read: false})
+	.pipe(clean())
 
-gulp.task 'watch', ->
-	gulp.watch './coffee/**/*.coffee', ['lib']
+gulp.task 'sample', ['cleansample'], ->
+	gulp.src('./coffee/sample/*.coffee')
+	.pipe(coffee())
+	.pipe(header(banner, {pkg: pkg}))
+	.pipe(chmod({owner: {execute: true, write: true, read: true}}))
+	.pipe(gulp.dest(SAMPLE_JS))
+	.on('error', gutil.log)
+	gulp.src(['./coffee/sample/*.properties', './coffee/sample/*.js'])
+	.pipe(gulp.dest(SAMPLE_JS))
+	.on('error', gutil.log)
 
-gulp.task 'lib', ['clean'], ->
+gulp.task 'lib', ['cleanlib'], ->
 	gulp.src('./coffee/*.coffee')
 	.pipe(coffee())
 	.pipe(header(banner, {pkg: pkg}))
@@ -94,4 +106,11 @@ gulp.task 'lib', ['clean'], ->
 	.pipe(gulp.dest(LIB_JS))
 	.on('error', gutil.log)
 
-gulp.task 'default', ['watch']
+gulp.task 'watch', ->
+	gulp.watch './coffee/*.coffee', ['lib']
+	gulp.watch './coffee/sample/*.coffee', ['sample']
+
+gulp.task 'sample-command', ['setup'], ->
+	gutil.log "./lib/kclhelper.js --print_command --java /usr/bin/java --props ./lib/sample/sample_kclnode_app.properties"
+
+gulp.task 'default', ['lib', 'sample', 'watch']

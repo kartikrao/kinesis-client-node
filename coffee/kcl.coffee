@@ -97,5 +97,4 @@ class KCL extends EventEmitter
 			return
 		return
 
-kcl = new KCL
-do kcl.run
+module.exports = KCL

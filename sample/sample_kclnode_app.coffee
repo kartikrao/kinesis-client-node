@@ -1,2 +1,0 @@
-kcl = require '../lib/kcl'
-

@@ -14,9 +14,11 @@
     "aws-sdk": "2.0.27",
     "coffee-script": "1.8.0",
     "glob": "4.0.6",
+    "kinesis": "^1.0.2",
     "optimist": "0.6.1",
     "underscore": "1.7.0",
-    "wget": "0.0.1"
+    "wget": "0.0.1",
+    "winston": "^0.8.3"
   },
   "devDependencies": {
     "download": "3.1.2",
