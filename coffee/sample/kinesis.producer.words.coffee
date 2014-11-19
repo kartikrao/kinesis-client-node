@@ -1,11 +1,8 @@
 #!env /usr/local/bin/node
 
 KCL = require '../kcl'
-logger = require '../logger'
-
 AWS = require 'aws-sdk'
 async = require 'async'
-logger = require '../logger'
 optimist = require 'optimist'
 settings = require './kinesis.app.words.settings'
 
@@ -21,25 +18,29 @@ class KinesisWordProducer
 		@kinesis.createStream {StreamName: stream, numShards : 1}, cb
 		return
 	getStreamStatus : (stream, cb) ->
-		logger.info "sample_kclnode_app : KinesisProducer : getStreamStatus #{stream}"
+		console.log "KinesisProducer : getStreamStatus #{stream}"
 		@kinesis.describeStream {StreamName: stream}, cb
 		return
 	waitForStream : (stream, cb) ->
 		self = @
 		streamStatus = null
 		streamActivationPending = -> "ACTIVE" is streamStatus
+		statusCb = (err, status) ->
+			if status?
+				streamStatus = status.StreamDescription.StreamStatus
+			return
 		checkStream = (_cb) -> 
 			if streamStatus?
 				setTimeout ->
-					self.getStreamStatus stream, _cb
+					self.getStreamStatus stream, statusCb
 				, self.sleepSeconds
 			else
-				self.getStreamStatus stream, _cb
+				self.getStreamStatus stream, statusCb
 			return
 		async.doWhilst checkStream, streamActivationPending, cb
 		return
 	putWordsInStream : (stream, words=[], callback) ->
-		logger.info "sample_kclnode_app : KinesisProducer : putWordsInStream #{words.length} #{stream}"
+		console.log "KinesisProducer : putWordsInStream : Queueing [#{words.length}] items to enter stream [#{stream}]"
 		self = @
 		workers = {}
 		for word in words
@@ -55,14 +56,15 @@ class KinesisWordProducer
 	putWordsInStreamPeriodically : (stream, words, period) ->
 		self = @
 		period ?= @SLEEP_SECONDS
-		logger.info "sample_kclnode_app : KinesisProducer : putWordsInStreamPeriodically"
+		console.log "KinesisProducer : putWordsInStreamPeriodically"
 		truthTest = -> true
 		delay = (cb) ->
 			putWordsInStream stream, words, ->
 			setTimeout cb, period
 			return
 		callback = (err) ->
-			logger.error "sample_kclnode_app : KinesisProducer : putWordsInStreamPeriodically", err
+			console.log "KinesisProducer : putWordsInStreamPeriodically", err
+			return
 		async.whilst truthTest, delay, callback
 		return
 
@@ -70,41 +72,48 @@ class KinesisWordProducer
 wordProducer = new KinesisWordProducer
 
 argv = optimist.argv
-usage = """
-	--stream Stream Name                      - Required
-	--region AWS Region                       - Required
-	--words  Comma separated list of words    - Required
-	--period Periodic put interval in seconds - Optional
-"""
 
 {stream, region, words, period} = argv
 
 if stream? and region? and words?
 	if words.indexOf(',')
 		words = words.split(',')
-	wordProducer.getStreamStatus(err, data) ->
+	wordProducer.getStreamStatus stream, (err, status) ->
 		initiatePuts = ->
-			console.log "Polling #{stream}:state"
-			wordProducer.waitForStream stream, ->
-				console.log "#{stream} is now ACTIVE"
-				if period?
-					wordProducer.putWordsInStreamPeriodically stream, words, period
-				else
-					wordProducer.putWordsInStream stream, words, ->
-				return
-		if err? or not data?
-			# create
+			if period?
+				wordProducer.putWordsInStreamPeriodically stream, words, period, ->
+			else
+				wordProducer.putWordsInStream stream, words, ->
+					console.log "KinesisProducer : #{words.length} words added to stream [#{stream}]"
+					return
+			return
+		if err? or not status?
+			# Create Stream
 			wordProducer.createStream stream, (err, data) ->
 				if err?
-					console.log "Error creating stream [#{stream}]", err
+					console.log "KinesisProducer : Error creating stream [#{stream}]", err
 				else
 					do initiatePuts
 				return
-		if data? and data.StreamStatus?
-			# bail
-			if data.StreamStatus is "DELETING"
-				console.log "Stream [#{stream}] is being deleted, please rerun the script later"
+		if status?
+			streamStatus = status.StreamDescription.StreamStatus
+			# Abort
+			console.log "KinesisProducer : stream [#{stream}] is #{streamStatus}"
+
+			if streamStatus is "DELETING"
+				console.log "KinesisProducer : stream [#{stream}] is being deleted, please rerun the script later"
 				process.exit(1)
+			else if streamStatus is "ACTIVE"
+				console.log "KinesisProducer : stream [#{stream}] is active, initiating put"
+				do initiatePuts
+			else
+				console.log "KinesisProducer : Waiting for stream [#{stream}]"
+				wordProducer.waitForStream stream, initiatePuts
 		return
 else
-	console.error usage
+	console.error """
+	--stream Stream Name                      - Required
+	--region AWS Region                       - Required
+	--words  Comma separated list of words    - Required
+	--period Periodic put interval in seconds - Optional
+"""
