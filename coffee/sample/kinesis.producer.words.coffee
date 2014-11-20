@@ -68,7 +68,6 @@ class KinesisWordProducer
 		async.whilst truthTest, delay, callback
 		return
 
-
 wordProducer = new KinesisWordProducer
 
 argv = optimist.argv
@@ -79,7 +78,7 @@ if stream? and region? and words?
 	if words.indexOf(',')
 		words = words.split(',')
 	wordProducer.getStreamStatus stream, (err, status) ->
-		initiatePuts = ->
+		initiatePut = ->
 			if period?
 				wordProducer.putWordsInStreamPeriodically stream, words, period, ->
 			else
@@ -93,7 +92,7 @@ if stream? and region? and words?
 				if err?
 					console.log "KinesisProducer : Error creating stream [#{stream}]", err
 				else
-					do initiatePuts
+					do initiatePut
 				return
 		if status?
 			streamStatus = status.StreamDescription.StreamStatus
@@ -105,10 +104,10 @@ if stream? and region? and words?
 				process.exit(1)
 			else if streamStatus is "ACTIVE"
 				console.log "KinesisProducer : stream [#{stream}] is active, initiating put"
-				do initiatePuts
+				do initiatePut
 			else
 				console.log "KinesisProducer : Waiting for stream [#{stream}]"
-				wordProducer.waitForStream stream, initiatePuts
+				wordProducer.waitForStream stream, initiatePut
 		return
 else
 	console.error """
