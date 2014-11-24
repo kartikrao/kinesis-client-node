@@ -24,14 +24,13 @@ class RecordProcesser extends EventEmitter
 				r = record
 				{data, sequenceNumber, partitionKey} = r
 				data = new Buffer(data, 'base64').toString('utf8')
-				seq = parseInt sequenceNumber
 				key = partitionKey
 				(cb) ->
 					self.processer.processRecord data, sequenceNumber, key, (err) ->
 						if err?
 							logger.error err
 						else
-							self.largest_seq = sequenceNumber if not self.largest_seq? or self.largest_seq < seq
+							self.largest_seq = sequenceNumber if not self.largest_seq? or self.largest_seq < sequenceNumber
 							cb null, {sequenceNumber: sequenceNumber, success: !err?, error : err}
 						return
 					return

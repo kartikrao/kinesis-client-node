@@ -52,30 +52,6 @@ class KCL extends EventEmitter
 	constructor : (_process=process, @recordProcessor, checkpointRetries, checkpointFreqSeconds) ->
 		@io_handler = new IOHandler _process
 		@checkpointer = new Checkpointer @io_handler
-	checkpoint : (sequenceNumber, callback) ->
-		@checkpointSequence = sequenceNumber
-		@checkpointQueued = true
-		n = 1
-		self = @
-		attempt = (cb) ->
-			logger.info "Checkpoint attempt #{n}"
-			self.checkpointer.checkpoint sequenceNumber, (err) ->
-				if err?
-					switch err.toString()
-						when 'ShutdownException'
-							cb new Error('ShutdownException')
-						when 'ThrottlingException'
-							if (self.checkpointRetries - n) is 0
-								cb new Error("CheckpointRetryLimit")
-						when 'InvalidStateException'
-							cb new Error('InvalidStateException')
-				do cb
-			return
-		attemptsRemaining = ->
-			n += 1
-			n <= self.checkpointRetries
-		async.doWhilst attempt, attemptsRemaining, callback
-		return
 	performAction : (data) ->
 		ensureKey = (obj, key) ->
 			unless obj[key]?
@@ -83,6 +59,7 @@ class KCL extends EventEmitter
 			return obj[key]
 		action = data["action"]
 		self = @
+		logger.info "Action #{action}", data, @checkpointSequence
 		switch action
 			when "initialize"
 				@recordProcessor.initialize ensureKey(data, "shardId"), ->
@@ -101,6 +78,7 @@ class KCL extends EventEmitter
 						self.checkpointRetries[sequenceNumber] ?= 0
 						if self.checkpointRetries[sequenceNumber] >= self.defaultCheckpointRetries
 							throw new Error("CheckpointRetryLimit")
+						self.checkpointSequence = sequenceNumber
 						self.checkpointer.checkpoint sequenceNumber, ->
 							self.checkpointRetries[sequenceNumber] += 1
 					return
@@ -109,14 +87,13 @@ class KCL extends EventEmitter
 					self.reportDone 'shutdown'
 					return
 			when 'checkpoint'
-				logger.info 'Checkpoint Action', data
-				if (data.error? and !(data.error == 'null')) or data.checkpoint isnt @checkpointSequence
+				if (data.error?.length > 4)
 					logger.error "CheckpointError", data.error
 					throw new Error(data.error)
 				else
 					@checkpointQueued = false
 					@lastCheckpointTime = timeMillis()
-					logger.info "Checkpoint completed - #{checkpointSequence} after #{self.checkpointRetries[checkpointSequence]} tries"
+					logger.info "Checkpoint completed - #{@checkpointSequence} after #{@checkpointRetries[@checkpointSequence]} tries"
 					delete @checkpointRetries[@checkpointSequence]
 					@checkpointSequence = null
 			else
@@ -124,19 +101,16 @@ class KCL extends EventEmitter
 		return
 	reportDone : (responseFor) ->
 		@io_handler.writeAction {"action" : "status", "responseFor" : responseFor}
-		#do @io_handler.lineReader.resume
 		return
 	handleLine : (line) ->
 		data = line
 		if _.isString(line) is true
 			data = JSON.parse(line)
-		logger.info "IOHandler.stdin : #{new Date().getTime()} - Line #{data.action} - #{data.error}"
 		@performAction data
 		return
 	run : ->
 		self = @
 		@io_handler.lineReader.on 'line', (line) ->
-			#do self.io_handler.lineReader.pause
 			if line?.length > 0
 				self.handleLine line
 			return
