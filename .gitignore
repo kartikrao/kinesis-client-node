@@ -6,3 +6,5 @@ jars
 coffee/sample/kinesis.app.words.settings.js
 lib
 *.log
+
+logs/worker.log
