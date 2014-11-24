@@ -6,7 +6,7 @@ logger = require('../logger')
 
 class WordProcessor
 	processRecord : (data, seq, key, cb) ->
-		logger.info("WordProcessor : processing [#{data.records.length}] records")
+		logger.info("WordProcessor : processing [#{data.length}] records")
 		###
 		Your Processing Logic
 		###

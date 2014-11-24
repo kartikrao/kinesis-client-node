@@ -18,7 +18,7 @@ class IOHandler
 		@lineReader = readline.createInterface {input: @input_file, output: @output_file}
 		self = @
 	writeLine : (line) ->
-		@output_file.write "#{line}\n"
+		logger.info "Write Line Response", @output_file.write "#{line}\n"
 		return
 	writeError : (error) ->
 		@error_file.write "#{error}\n"
@@ -35,32 +35,16 @@ class IOHandler
 
 class Checkpointer
 	constructor : (@io_handler) ->
-	checkpoint : (sequenceNumber, cb) ->
-		sequenceNumber ?= null
+	checkpoint : (sequenceNumber=null, cb) ->
 		response = {"action" : "checkpoint", "checkpoint" : sequenceNumber}
-		self = @
-		# lineHandler = (line) ->
-		# 	data = line
-		# 	if _.isString(line) is true
-		# 		data = JSON.parse(line)
-		# 	logger.info "Checkpoint line listener #{_.isFunction(lineHandler)} Line Action #{data.action}" 
-		# 	if not data? or data.action isnt "checkpoint"
-		# 		error = data?.error or "InvalidStateException"
-		# 		logger.info "Checkpoint error #{error}", data 
-		# 		cb null, new Error(error)
-		# 	else
-		# 		cb null
-		# 	if lineHandler?
-		# 		try
-		# 			self.io_handler.lineReader.removeListener 'line', lineHandler
-		# 		catch ex
-		# 			logger.error "Listener FUCK UP", ex
-		# 	return
 		@io_handler.writeAction response
+		process.nextTick ->
+			do cb
 		return
 
 class KCL extends EventEmitter
-	checkpointRetries : 5
+	defaultCheckpointRetries : 5
+	checkpointRetries : {}
 	checkpointFreqSeconds : 60
 	largestSequence : null
 	lastCheckpointTime : 0
@@ -71,27 +55,25 @@ class KCL extends EventEmitter
 	checkpoint : (sequenceNumber, callback) ->
 		@checkpointSequence = sequenceNumber
 		@checkpointQueued = true
-		n = 0
+		n = 1
 		self = @
-		attempt = ->
+		attempt = (cb) ->
+			logger.info "Checkpoint attempt #{n}"
 			self.checkpointer.checkpoint sequenceNumber, (err) ->
 				if err?
 					switch err.toString()
 						when 'ShutdownException'
-							callback new Error('ShutdownException')
-							return
+							cb new Error('ShutdownException')
 						when 'ThrottlingException'
 							if (self.checkpointRetries - n) is 0
-								callback new Error("CheckpointRetryLimit")
-							else
-								n += 1
-							return
+								cb new Error("CheckpointRetryLimit")
 						when 'InvalidStateException'
-							callback new Error('InvalidStateException')
-				else
-					do callback
+							cb new Error('InvalidStateException')
+				do cb
 			return
-		attemptsRemaining = -> n < self.checkpointRetries
+		attemptsRemaining = ->
+			n += 1
+			n <= self.checkpointRetries
 		async.doWhilst attempt, attemptsRemaining, callback
 		return
 	performAction : (data) ->
@@ -116,40 +98,46 @@ class KCL extends EventEmitter
 					needCheckpoint = ((timeMillis() - self.lastCheckpointTime) / 1000) > self.checkpointFreqSeconds
 					logger.info "kcl.processRecords Checkpoint #{needCheckpoint} #{(timeMillis() - self.lastCheckpointTime) / 1000}"
 					if needCheckpoint is true and not (self.checkpointQueued and self.checkpointSequence is sequenceNumber)
-						logger.info "Checkpoint Trigger #{sequenceNumber}"
-						self.checkpoint sequenceNumber, ->
-							self.lastCheckpointTime = timeMillis()
-							logger.info "Checkpoint Callback #{sequenceNumber}"
-							return
+						self.checkpointRetries[sequenceNumber] ?= 0
+						if self.checkpointRetries[sequenceNumber] >= self.defaultCheckpointRetries
+							throw new Error("CheckpointRetryLimit")
+						self.checkpointer.checkpoint sequenceNumber, ->
+							self.checkpointRetries[sequenceNumber] += 1
 					return
 			when 'shutdown'
 				@recordProcessor.shutdown @checkpointer, ensureKey(data, "reason"), ->
 					self.reportDone 'shutdown'
 					return
 			when 'checkpoint'
-				@checkpointQueued = false
 				logger.info 'Checkpoint Action', data
-				if data.error? or data.checkpoint isnt @checkpointSequence
-					throw new Error("Failed to checpoint - Error ['#{data.error}']")
+				if (data.error? and !(data.error == 'null')) or data.checkpoint isnt @checkpointSequence
+					logger.error "CheckpointError", data.error
+					throw new Error(data.error)
+				else
+					@checkpointQueued = false
+					@lastCheckpointTime = timeMillis()
+					logger.info "Checkpoint completed - #{checkpointSequence} after #{self.checkpointRetries[checkpointSequence]} tries"
+					delete @checkpointRetries[@checkpointSequence]
+					@checkpointSequence = null
 			else
 				throw new Error("Received an action which couldn't be understood. Action was '#{action}'")
 		return
 	reportDone : (responseFor) ->
 		@io_handler.writeAction {"action" : "status", "responseFor" : responseFor}
-		do @io_handler.lineReader.resume
+		#do @io_handler.lineReader.resume
 		return
 	handleLine : (line) ->
 		data = line
 		if _.isString(line) is true
 			data = JSON.parse(line)
+		logger.info "IOHandler.stdin : #{new Date().getTime()} - Line #{data.action} - #{data.error}"
 		@performAction data
 		return
 	run : ->
 		self = @
 		@io_handler.lineReader.on 'line', (line) ->
-			do self.io_handler.lineReader.pause
+			#do self.io_handler.lineReader.pause
 			if line?.length > 0
-				logger.info "IOHandler.stdin : #{new Date().getTime()} - Line #{JSON.parse(line).action}"
 				self.handleLine line
 			return
 		return
