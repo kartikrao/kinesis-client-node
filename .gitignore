@@ -5,3 +5,4 @@ jars
 *.pem
 coffee/sample/kinesis.app.words.settings.js
 lib
+*.log
