@@ -18,13 +18,12 @@ class IOHandler
 		@lineReader = readline.createInterface {input: @input_file, output: @output_file}
 		self = @
 	writeLine : (line) ->
-		logger.info "Write Line Response", @output_file.write "#{line}\n"
+		@output_file.write "#{line}\n"
 		return
 	writeError : (error) ->
 		@error_file.write "#{error}\n"
 		return
 	writeAction : (response) ->
-		logger.info "IOHandler : #{new Date().getTime()} - writeAction #{JSON.stringify(response)}"
 		@writeLine JSON.stringify(response)
 		return
 	loadAction : (line) ->
@@ -58,22 +57,22 @@ class KCL extends EventEmitter
 			return obj[key]
 		action = data["action"]
 		self = @
-		logger.info "Action #{action}", data, @checkpointSequence
 		switch action
 			when "initialize"
+				logger.info "KCL.performAction - Initialize - SHARD #{data.shardId}"
 				@recordProcessor.initialize ensureKey(data, "shardId"), ->
 					self.reportDone 'initialize'
 					return
 			when "processRecords"
 				@recordProcessor.processRecords ensureKey(data, "records"), @checkpointer, (err, sequenceNumber) ->
 					self.reportDone 'processRecords'
-					logger.info "kcl processRecords #{sequenceNumber}"
 					if self.largestSequence is null or self.largestSequence < sequenceNumber
 						self.largestSequence = sequenceNumber
 					# Checkpointing Logic
 					needCheckpoint = ((timeMillis() - self.lastCheckpointTime) / 1000) > self.checkpointFreqSeconds
 					logger.info "kcl.processRecords Checkpoint #{needCheckpoint} #{(timeMillis() - self.lastCheckpointTime) / 1000}"
 					if needCheckpoint is true and not (self.checkpointQueued and self.checkpointSequence is sequenceNumber)
+						logger.info "KCL.performAction - Queue Checkpoint #{sequenceNumber}"
 						self.checkpointRetries[sequenceNumber] ?= 0
 						if self.checkpointRetries[sequenceNumber] >= self.defaultCheckpointRetries
 							throw new Error("CheckpointRetryLimit")
@@ -82,6 +81,7 @@ class KCL extends EventEmitter
 							self.checkpointRetries[sequenceNumber] += 1
 					return
 			when 'shutdown'
+				logger.info "KCL.performAction - Shutdown"
 				@recordProcessor.shutdown @checkpointer, ensureKey(data, "reason"), ->
 					self.reportDone 'shutdown'
 					return
@@ -90,6 +90,7 @@ class KCL extends EventEmitter
 					logger.error "CheckpointError", data.error
 					throw new Error(data.error)
 				else
+					logger.info "KCL.performAction - Checkpoint OK #{@checkpointSequence}"
 					@checkpointQueued = false
 					@lastCheckpointTime = timeMillis()
 					logger.info "Checkpoint completed - #{@checkpointSequence} after #{@checkpointRetries[@checkpointSequence]} tries"
