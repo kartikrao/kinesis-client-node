@@ -38,8 +38,7 @@ class Checkpointer
 	checkpoint : (sequenceNumber=null, cb) ->
 		response = {"action" : "checkpoint", "checkpoint" : sequenceNumber}
 		@io_handler.writeAction response
-		process.nextTick ->
-			do cb
+		process.nextTick cb
 		return
 
 class KCL extends EventEmitter
