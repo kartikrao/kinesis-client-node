@@ -65,6 +65,7 @@ class KCL extends EventEmitter
 					return
 			when "processRecords"
 				@recordProcessor.processRecords ensureKey(data, "records"), @checkpointer, (err, sequenceNumber) ->
+					# Handle err from recordProcessor
 					self.reportDone 'processRecords'
 					if self.largestSequence is null or self.largestSequence < sequenceNumber
 						self.largestSequence = sequenceNumber

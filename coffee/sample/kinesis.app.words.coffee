@@ -10,7 +10,7 @@ class WordProcessor
 		###
 		Your Processing Logic
 		###
-		cb null
+		process.nextTick -> cb null
 		return
 
 wordProcessor = new WordProcessor
