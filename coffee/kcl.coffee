@@ -3,15 +3,18 @@
 readline = require 'readline'
 _ = require 'underscore'
 EventEmitter = require('events').EventEmitter
+logger = require './logger'
+byline = require 'byline'
+timeMillis = -> Date.now()
 
 class IOHandler
 	# process.stdout and stderr are blocking in TTY mode
-	constructor : (_process=process) ->
-		@input_file = _process.stdin
-		@output_file= _process.stdout
-		@error_file = _process.stderr
-		@isTTY      = _process.stdin.isTTY
-		@lineReader = readline.createInterface {input: @input_file, output : @output_file}
+	constructor : ->
+		@input_file = process.stdin
+		@output_file= process.stdout
+		@error_file = process.stderr
+		@isTTY      = process.stdin.isTTY
+		@lineReader = readline.createInterface {input: @input_file, output: @output_file}
 		self = @
 	write_line : (line) ->
 		@output_file.write "#{line}\n"
@@ -20,6 +23,7 @@ class IOHandler
 		@error_file.write "#{error}\n"
 		return
 	write_action : (response) ->
+		logger.info "IOHandler : #{new Date().getTime()} - Writing #{JSON.stringify(response)}"
 		@write_line JSON.stringify(response)
 		return
 	loadAction : (line) ->
@@ -38,27 +42,34 @@ class CheckpointError
 	asString : -> @message
 
 class Checkpointer
-	constructor : (io_handler) ->
+	constructor : (@io_handler) ->
 	checkpoint : (sequenceNumber, cb) ->
 		sequenceNumber ?= null
 		response = {"action" : "checkpoint", "checkpoint" : sequenceNumber}
 		self = @
-		listener = @io_handler.lineReader.on 'line', (line) ->
+		lineHandler = (line) ->
 			data = line
 			if _.isString(line) is true
 				data = JSON.parse(line)
+			logger.info "Checkpoint line listener #{_.isFunction(lineHandler)} Line Action #{data.action}" 
 			if not data? or data.action isnt "checkpoint"
 				error = data?.error or "InvalidStateException"
+				logger.info "Checkpoint error #{error}", data 
 				cb null, new Error(error)
 			else
 				cb null
-			self.io_handler.lineReader.removeListener 'line', listener
+			if lineHandler?
+				try
+					self.io_handler.lineReader.removeListener 'line', lineHandler
+				catch ex
+					logger.error "Listener FUCK UP", ex
 			return
+		@io_handler.lineReader.on 'line', lineHandler
 		@io_handler.write_action response
 		return
 
 class KCL extends EventEmitter
-	constructor : (_process=process) ->
+	constructor : (_process=process, @recordProcessor) ->
 		@io_handler = new IOHandler _process
 		@checkpointer = new Checkpointer @io_handler
 	_perform_action : (data) ->
@@ -67,13 +78,28 @@ class KCL extends EventEmitter
 				throw new Error("Action #{obj.action} was expected to have key #{key}")
 			return obj[key]
 		action = data["action"]
+		self = @
 		switch action
 			when "initialize"
-				@emit 'initialize', ensureKey(data, "shardId")
+				@recordProcessor.initialize ensureKey(data, "shardId"), ->
+					self._report_done 'initialize'
+					return
 			when "processRecords"
-				@emit 'processRecords', ensureKey(data, "records"), @checkpointer
+				@recordProcessor.processRecords ensureKey(data, "records"), @checkpointer, (err, checkpointSeq) ->
+					self._report_done 'processRecords'
+					if checkpointSeq?
+						self.checkpointer.checkpoint self.checkpointer, checkpointSeq, (err) ->
+							logger.error(err) if err
+							return
+					self.emit 'checkpoint', checkpointSeq, timeMillis
+					return
 			when 'shutdown'
-				@emit 'shutdown', checkpointer, ensureKey(data, "reason")
+				@recordProcessor.shutdown @checkpointer, ensureKey(data, "reason"), ->
+					self._report_done 'shutdown'
+					return
+			when 'checkpoint'
+				logger.info "Checkpoint Data", data
+				logger.info 'ignore checkpoint message'
 			else
 				throw new Error("Received an action which couldn't be understood. Action was '#{action}'")
 		# handle @@mit throws error
@@ -85,14 +111,13 @@ class KCL extends EventEmitter
 		data = line
 		if _.isString(line) is true
 			data = JSON.parse(line)
-
 		@_perform_action data
-		@_report_done data.action
 		return
 	run : ->
 		self = @
 		@io_handler.lineReader.on 'line', (line) ->
 			if line?.length > 0
+				logger.info "IOHandler : #{new Date().getTime()} - Got Line #{JSON.parse(line).action}"
 				self._handle_a_line line
 			return
 		return

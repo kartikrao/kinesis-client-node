@@ -8,7 +8,7 @@ level = if env is 'production' then 'info' else 'debug'
 Loggers = 
 	transports :
 		file:
-			level  : flevel
+			level  : level
 			filename: logfile
 			maxsize : 67108864
 			maxFiles: 8

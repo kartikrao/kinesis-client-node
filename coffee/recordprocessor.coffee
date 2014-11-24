@@ -1,74 +1,84 @@
 KCL = require './kcl'
 
 EventEmitter = require('events').EventEmitter
-
+async = require 'async'
 timeMillis = -> Date.now()
+logger = require './logger'
+_ = require 'underscore'
 
 class RecordProcesser extends EventEmitter
 	constructor : (@processer, @SLEEP_SECONDS=5, @CHECKPOINT_RETRIES=5, @CHECKPOINT_FREQ_SECONDS=60) ->
-	run : (child_process) ->
+	run : ->
 		# Use spawned process's streams
 		self = @
-		{stdin, stdout, stderr} = child_process
-		kcl = new KCL(stdin, stdout, stderr)
-		kcl.on 'initialize', ->
-			self.initialize.apply self, arguments
-			return
-		kcl.on 'processRecords', ->
-			self.processRecords.apply self, arguments
-			return
-		kcl.on 'shutdown', ->
-			self.shutdown.apply self, arguments
-			return
-		@processer.on 'processed', (_seq) ->
-			@largest_seq = _seq if not @largest_seq? or @largest_seq < _seq
-			if ((timeMillis() - self.last_checkpoint_time) / 1000) > @CHECKPOINT_FREQ_SECONDS
-				@checkpoint checkpointer, self.largest_seq + ""
-				@last_checkpoint_time = timeMillis()
-			return
-		@processor.on 'error', (err) ->
-			console.log err
-			process.exit -1
-			return
+		{stdin, stdout, stderr} = process
+		@kcl = new KCL(process, @)
+		do @kcl.run
 		return
-	process_records : (records, checkpointer) ->
+	processRecords : (records, checkpointer, callback) ->
+		self = @
 		self.emit 'records'
+		agents = {}
 		for record in records
-			data = new Buffer(record.data, 'base64').toString('utf8')
-			seq = parseInt record["sequenceNumber"]
-			key = record["partitionKey"]
-			@processer.emit 'record', data, key, seq
+			agents[record.sequenceNumber] = do ->
+				r = record
+				{data, sequenceNumber, partitionKey} = r
+				data = new Buffer(data, 'base64').toString('utf8')
+				seq = parseInt sequenceNumber
+				key = partitionKey
+				(cb) ->
+					self.processer.processRecord data, sequenceNumber, key, (err) ->
+						if err?
+							logger.error err
+						else
+							self.largest_seq = sequenceNumber if not self.largest_seq? or self.largest_seq < seq
+							logger.info "processRecords : Processing complete, running callback"
+							cb null, {sequenceNumber: sequenceNumber, success: !err?, error : err}
+						return
+					return
+		async.series agents, (err, result) ->
+			if err?
+				logger.error "Waterfall error", err
+				callback err
+			else
+				isCheckpoint = ((timeMillis() - self.last_checkpoint_time) / 1000) > self.CHECKPOINT_FREQ_SECONDS
+				callback null, self.largest_seq
+				logger.info "Waterfall result", result
+			return
 		return
-	shutdown : (checkpointer, reason) ->
-		self.emit 'records', reason
+	shutdown : (checkpointer, reason, callback) ->
+		self.emit 'shutdown', reason
 		if reason is 'TERMINATE'
 			@checkpoint checkpointer, @largest_seq
+		do callback
 		return
-	initialize : (shard_id) ->
+	initialize : (shard_id, callback) ->
 		@shard_id = shard_id
-		self.emit 'initialize', shard_id
+		@emit 'initialize', shard_id
 		@largest_seq = null
-		@last_checkpoint_time = hrtime
-	checkpoint : (checkpointer, sequence_number=null) ->
+		@last_checkpoint_time = 0
+		do callback
+	checkpoint : (checkpointer, sequenceNumber, callback) ->
 		self = @
 		n = 0
+		checkpointer ?= self.kcl.checkpointer
 		attempt = ->
-			checkpointer.checkpoint sequence_number, (err) ->
+			checkpointer.checkpoint sequenceNumber, (err) ->
 				if err?
-					switch err.asString()
+					switch err.toString()
 						when 'ShutdownException'
-							self.emit 'checkpoint_error', err
+							callback new Error('ShutdownException')
 							return
 						when 'ThrottlingException'
 							if (self.CHECKPOINT_RETRIES - n) is 0
-								self.emit 'checkpoint_error', new Error("CheckpointRetryLimit")
+								callback new Error("CheckpointRetryLimit")
 							return
 						when 'InvalidStateException'
-							self.emit 'checkpoint_retry', err
-						else
-							self.emit 'checkpoint_retry', err
+							callback new Error('InvalidStateException')
 				else
-					self.emit 'checkpoint'
+					self.last_checkpoint_time = timeMillis()
+					self.largest_seq = sequenceNumber
+					do callback
 			return
 		do attempt
 		return

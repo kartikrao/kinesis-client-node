@@ -1,1 +1,0 @@
-kinesis.consumer.words.coffee

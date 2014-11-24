@@ -50,7 +50,10 @@ class KinesisWordProducer
 					Data : new Buffer(w, 'utf8')
 					PartitionKey : w
 					StreamName   : stream
-				(cb) -> self.kinesis.putRecord packet, cb
+				(cb) -> 
+					console.log "#{new Date().getTime()} - Kinesis.putRecord #{packet.Data}"
+					self.kinesis.putRecord packet, cb
+					return
 		async.series workers, callback
 		return
 	putWordsInStreamPeriodically : (stream, words, period) ->
@@ -59,7 +62,7 @@ class KinesisWordProducer
 		console.log "KinesisProducer : putWordsInStreamPeriodically"
 		truthTest = -> true
 		delay = (cb) ->
-			putWordsInStream stream, words, ->
+			self.putWordsInStream stream, words, ->
 			setTimeout cb, period
 			return
 		callback = (err) ->

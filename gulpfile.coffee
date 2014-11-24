@@ -21,16 +21,18 @@ banner = [ '#!/usr/bin/env node'
 	''
 ].join('\n')
 
-JARS = [{groupId: 'com.amazonaws', artifactId: 'amazon-kinesis-client', version: '1.2.0'},
-{groupId: 'com.fasterxml.jackson.core', artifactId: 'jackson-core', version: '2.1.1'},
-{groupId: 'org.apache.httpcomponents', artifactId: 'httpclient', version: '4.2'},
-{groupId: 'org.apache.httpcomponents', artifactId: 'httpcore', version: '4.2'},
-{groupId: 'com.fasterxml.jackson.core', artifactId: 'jackson-annotations', version: '2.1.1'},
-{groupId: 'commons-codec', artifactId: 'commons-codec', version: '1.3'},
-{groupId: 'joda-time', artifactId: 'joda-time', version: '2.4'},
-{groupId: 'com.amazonaws', artifactId: 'aws-java-sdk', version: '1.7.13'},
-{groupId: 'com.fasterxml.jackson.core', artifactId: 'jackson-databind', version: '2.1.1'},
-{groupId: 'commons-logging', artifactId: 'commons-logging', version: '1.1.1'}]
+JARS = [
+	{groupId: 'com.amazonaws', artifactId: 'amazon-kinesis-client', version: '1.2.0'},
+	{groupId: 'com.fasterxml.jackson.core', artifactId: 'jackson-core', version: '2.1.1'},
+	{groupId: 'org.apache.httpcomponents', artifactId: 'httpclient', version: '4.2'},
+	{groupId: 'org.apache.httpcomponents', artifactId: 'httpcore', version: '4.2'},
+	{groupId: 'com.fasterxml.jackson.core', artifactId: 'jackson-annotations', version: '2.1.1'},
+	{groupId: 'commons-codec', artifactId: 'commons-codec', version: '1.3'},
+	{groupId: 'joda-time', artifactId: 'joda-time', version: '2.4'},
+	{groupId: 'com.amazonaws', artifactId: 'aws-java-sdk', version: '1.7.13'},
+	{groupId: 'com.fasterxml.jackson.core', artifactId: 'jackson-databind', version: '2.1.1'},
+	{groupId: 'commons-logging', artifactId: 'commons-logging', version: '1.1.1'}
+]
 
 JAR_PATH   = path.resolve "#{__dirname}/jars"
 MAVEN_REPO = "http://search.maven.org/remotecontent?filepath="
@@ -108,7 +110,7 @@ gulp.task 'lib', ['cleanlib'], ->
 
 gulp.task 'watch', ->
 	gulp.watch './coffee/*.coffee', ['lib']
-	gulp.watch './coffee/sample/*.coffee', ['sample']
+	gulp.watch ['./coffee/sample/*.coffee', './coffee/sample/*.js', './coffee/sample/*.properties'], ['sample']
 
 gulp.task 'sample-command', ['setup'], ->
 	gutil.log "./lib/kclhelper.js --print_command --java /usr/bin/java --props ./lib/sample/sample_kclnode_app.properties"
