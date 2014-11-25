@@ -6,8 +6,10 @@ timeMillis = -> Date.now()
 logger = require './logger'
 _ = require 'underscore'
 
-class RecordProcesser extends EventEmitter
-	constructor : (@processer, @SLEEP_SECONDS=5, @CHECKPOINT_RETRIES=5, @CHECKPOINT_FREQ_SECONDS=60) ->
+class RecordProcesser
+	constructor : (@processer) ->
+		unless @processer? and _.isFunction(@processer.processRecords)
+			throw new Error("ProcessorInterfaceIncompatible")
 	run : ->
 		# Use spawned process's streams
 		self = @
@@ -17,7 +19,6 @@ class RecordProcesser extends EventEmitter
 		return
 	processRecords : (records, callback) ->
 		self = @
-		self.emit 'records'
 		agents = {}
 		for record in records
 			agents[record.sequenceNumber] = do ->
@@ -43,14 +44,22 @@ class RecordProcesser extends EventEmitter
 			return
 		return
 	shutdown : (reason, callback) ->
-		self.emit 'shutdown', reason
-		do callback
+		if @processer.shutdown?
+			@processer.shutdown reason, (err) ->
+				callback err
+				return
+		else
+			do callback
 		return
 	initialize : (shard_id, callback) ->
 		@shard_id = shard_id
-		@emit 'initialize', shard_id
 		@largest_seq = null
-		@last_checkpoint_time = 0
+		if @processer.initialize?
+			@processer.initialize shard_id, (err) ->
+				callback err
+				return
+			return
 		do callback
+		return
 
 module.exports = RecordProcesser
