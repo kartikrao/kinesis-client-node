@@ -113,6 +113,6 @@ gulp.task 'watch', ->
 	gulp.watch ['./coffee/sample/*.coffee', './coffee/sample/*.js', './coffee/sample/*.properties'], ['sample']
 
 gulp.task 'sample-command', ['setup'], ->
-	gutil.log "./lib/kclhelper.js --print_command --java /usr/bin/java --props ./lib/sample/sample_kclnode_app.properties"
+	gutil.log "./lib/kclhelper.js --print_command --java /usr/bin/java --props ./lib/sample/ml-daemon.properties"
 
 gulp.task 'default', ['lib', 'sample', 'watch']
