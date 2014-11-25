@@ -1,7 +1,7 @@
 #!env /usr/local/bin/node
 
 readline = require 'readline'
-_ = require 'underscore'
+_ = require 'lodash'
 EventEmitter = require('events').EventEmitter
 logger = require './logger'
 async = require 'async'

@@ -4,7 +4,7 @@ EventEmitter = require('events').EventEmitter
 async = require 'async'
 timeMillis = -> Date.now()
 logger = require './logger'
-_ = require 'underscore'
+_ = require 'lodash'
 
 class RecordProcesser
 	constructor : (@processer) ->

@@ -1,7 +1,7 @@
 #!env /usr/local/bin/node
 
 optimist = require 'optimist'
-_ = require 'underscore'
+_ = require 'lodash'
 path = require 'path'
 Glob = require('glob').Glob
 
