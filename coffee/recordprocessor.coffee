@@ -15,7 +15,7 @@ class RecordProcesser extends EventEmitter
 		@kcl = new KCL(process, @)
 		do @kcl.run
 		return
-	processRecords : (records, checkpointer, callback) ->
+	processRecords : (records, callback) ->
 		self = @
 		self.emit 'records'
 		agents = {}
@@ -42,7 +42,7 @@ class RecordProcesser extends EventEmitter
 				callback null, self.largest_seq
 			return
 		return
-	shutdown : (checkpointer, reason, callback) ->
+	shutdown : (reason, callback) ->
 		self.emit 'shutdown', reason
 		do callback
 		return

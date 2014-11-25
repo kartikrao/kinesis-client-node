@@ -32,28 +32,30 @@ class IOHandler
 		else
 			null
 
-class Checkpointer
-	constructor : (@io_handler) ->
-	checkpoint : (sequenceNumber=null, cb) ->
-		response = {"action" : "checkpoint", "checkpoint" : sequenceNumber}
-		@io_handler.writeAction response
-		process.nextTick cb
-		return
-
 class KCL extends EventEmitter
 	defaultCheckpointRetries : 5
-	checkpointRetries : {}
 	checkpointFreqSeconds : 60
-	largestSequence : null
 	lastCheckpointTime : 0
 	checkpointSequence : null
-	constructor : (_process=process, @recordProcessor, checkpointRetries, checkpointFreqSeconds) ->
+	checkpointRetries  : {}
+	largestSequence    : null
+	SLEEP_MILLIS : 5000
+	constructor : (_process=process, @recordProcessor, @defaultCheckpointRetries=5, @checkpointFreqSeconds=60) ->
 		@io_handler = new IOHandler _process
-		@checkpointer = new Checkpointer @io_handler
+	checkpoint : (sequenceNumber=null, cb) ->
+		@checkpointRetries[sequenceNumber] ?= 0
+		if @checkpointRetries[sequenceNumber] >= @defaultCheckpointRetries
+			throw new Error("CheckpointRetryLimit")
+		@checkpointSequence = sequenceNumber
+		@io_handler.writeAction {"action" : "checkpoint", "checkpoint" : sequenceNumber}
+		@checkpointRetries[sequenceNumber] += 1
+		do cb
+		return
 	performAction : (data) ->
 		ensureKey = (obj, key) ->
 			unless obj[key]?
-				throw new Error("Action #{obj.action} was expected to have key #{key}")
+				logger.error "KCL.performAction - Action #{obj.action} missing key #{key}"
+				throw new Error("MissingKeyError")
 			return obj[key]
 		action = data["action"]
 		self = @
@@ -64,41 +66,50 @@ class KCL extends EventEmitter
 					self.reportDone 'initialize'
 					return
 			when "processRecords"
-				@recordProcessor.processRecords ensureKey(data, "records"), @checkpointer, (err, sequenceNumber) ->
+				@recordProcessor.processRecords ensureKey(data, "records"), (err, sequenceNumber) ->
 					# Handle err from recordProcessor
 					self.reportDone 'processRecords'
 					if self.largestSequence is null or self.largestSequence < sequenceNumber
 						self.largestSequence = sequenceNumber
 					# Checkpointing Logic
 					needCheckpoint = ((timeMillis() - self.lastCheckpointTime) / 1000) > self.checkpointFreqSeconds
-					logger.info "kcl.processRecords Checkpoint #{needCheckpoint} #{(timeMillis() - self.lastCheckpointTime) / 1000}"
-					if needCheckpoint is true and not (self.checkpointQueued and self.checkpointSequence is sequenceNumber)
-						logger.info "KCL.performAction - Queue Checkpoint #{sequenceNumber}"
-						self.checkpointRetries[sequenceNumber] ?= 0
-						if self.checkpointRetries[sequenceNumber] >= self.defaultCheckpointRetries
-							throw new Error("CheckpointRetryLimit")
-						self.checkpointSequence = sequenceNumber
-						self.checkpointer.checkpoint sequenceNumber, ->
-							self.checkpointRetries[sequenceNumber] += 1
+					if needCheckpoint is true and not (self.checkpointQueued is true and self.checkpointSequence == sequenceNumber)
+						self.checkpoint sequenceNumber, ->
+							logger.info "KCL.performAction - processRecords - Queue Checkpoint #{sequenceNumber}"
+							return
 					return
 			when 'shutdown'
 				logger.info "KCL.performAction - Shutdown"
-				@recordProcessor.shutdown @checkpointer, ensureKey(data, "reason"), ->
-					self.reportDone 'shutdown'
+				reason = ensureKey(data, "reason")
+				@recordProcessor.shutdown ensureKey(data, "reason"), ->
+					if reason is "TERMINATE"
+						self.checkpoint self.largestSequence, ->
+							self.reportDone 'shutdown'
+							return
 					return
 			when 'checkpoint'
 				if (data.error?.length > 4)
-					logger.error "CheckpointError", data.error
-					throw new Error(data.error)
+					switch data.error 
+						when "ThrottlingException"
+							setTimeout ->
+								self.checkpoint sequenceNumber, ->
+									logger.info "KCL.performAction - processRecords - Queue Checkpoint #{sequenceNumber}"
+									return
+							, SLEEP_MILLIS
+						else
+							error = new Error(data.error)
+							logger.error "KCL.performAction - CheckpointError", error
+							throw error
 				else
-					logger.info "KCL.performAction - Checkpoint OK #{@checkpointSequence}"
 					@checkpointQueued = false
 					@lastCheckpointTime = timeMillis()
-					logger.info "Checkpoint completed - #{@checkpointSequence} after #{@checkpointRetries[@checkpointSequence]} tries"
+					logger.info "KCL.performAction - Checkpoint complete - #{self.largestSequence}"
 					delete @checkpointRetries[@checkpointSequence]
 					@checkpointSequence = null
 			else
-				throw new Error("Received an action which couldn't be understood. Action was '#{action}'")
+				error = new UnsupportedActionError()
+				logger.error "Received an action which couldn't be understood. Action was '#{action}'", error
+				throw error
 		return
 	reportDone : (responseFor) ->
 		@io_handler.writeAction {"action" : "status", "responseFor" : responseFor}
