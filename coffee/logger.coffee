@@ -2,8 +2,8 @@ winston = require 'winston'
 env = process.env.NODE_ENV
 path = require 'path'
 
-logfile = path.resolve "#{__dirname}/../logs/worker.log"
-level = if env is 'production' then 'info' else 'debug'
+logfile = path.resolve "#{__dirname}/../logs/kinesis.app.words.log"
+level = if env is 'production' then 'error' else 'info'
 
 Loggers = 
 	transports :
