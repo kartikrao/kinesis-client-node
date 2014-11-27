@@ -90,18 +90,18 @@ gulp.task 'cleansample', ->
 	.pipe(clean())
 
 gulp.task 'sample', ['cleansample'], ->
-	gulp.src('./coffee/sample/*.coffee')
+	gulp.src('./src/sample/*.coffee')
 	.pipe(coffee())
 	.pipe(header(banner, {pkg: pkg}))
 	.pipe(chmod({owner: {execute: true, write: true, read: true}}))
 	.pipe(gulp.dest(SAMPLE_JS))
 	.on('error', gutil.log)
-	gulp.src(['./coffee/sample/*.properties', './coffee/sample/*.js'])
+	gulp.src(['./src/sample/*.properties', './src/sample/*.js'])
 	.pipe(gulp.dest(SAMPLE_JS))
 	.on('error', gutil.log)
 
 gulp.task 'lib', ['cleanlib'], ->
-	gulp.src('./coffee/*.coffee')
+	gulp.src('./src/*.coffee')
 	.pipe(coffee())
 	.pipe(header(banner, {pkg: pkg}))
 	.pipe(chmod({owner: {execute: true, write: true, read: true}}))
@@ -109,8 +109,8 @@ gulp.task 'lib', ['cleanlib'], ->
 	.on('error', gutil.log)
 
 gulp.task 'watch', ->
-	gulp.watch './coffee/*.coffee', ['lib']
-	gulp.watch ['./coffee/sample/*.coffee', './coffee/sample/*.js', './coffee/sample/*.properties'], ['sample']
+	gulp.watch './src/*.coffee', ['lib']
+	gulp.watch ['./src/sample/*.coffee', './src/sample/*.js', './src/sample/*.properties'], ['sample']
 
 gulp.task 'sample-command', ['setup'], ->
 	gutil.log "./lib/kclhelper.js --print_command --java /usr/bin/java --props ./lib/sample/ml-daemon.properties"
