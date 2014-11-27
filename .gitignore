@@ -3,6 +3,6 @@ node_modules
 build
 jars
 *.pem
-coffee/sample/kinesis.app.words.settings.js
 lib
 logs/*.log
+kinesis.app.words.settings.js
